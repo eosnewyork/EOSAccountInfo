@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "EOSAccountAnalyzer": {
+      "commandName": "Project",
+      "commandLineArgs": "expand -f contacts.txt -ov true"
+    }
+  }
+}

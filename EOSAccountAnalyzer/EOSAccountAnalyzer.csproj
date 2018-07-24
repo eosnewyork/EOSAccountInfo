@@ -5,4 +5,23 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="NLog" Version="4.5.7" />
+    <PackageReference Include="NLog.Config" Version="4.5.7" />
+    <PackageReference Include="PowerArgs" Version="3.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="EOSNewYork.EOSCore">
+      <HintPath>..\..\EOSDotNet\EOSNewYork.EOSCore\bin\Debug\netstandard2.0\EOSNewYork.EOSCore.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="contacts.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
