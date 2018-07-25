@@ -172,9 +172,10 @@ namespace EOSAccountAnalyzer
             var eta = (StopWatch.Elapsed.TotalSeconds / DownloadCounter) * (contactList.Count - DownloadCounter);
             int etaSeconds = Convert.ToInt32(eta);
             TimeSpan remaining = new TimeSpan(0, 0, etaSeconds);
+            var percentage = (DownloadCounter / contactList.Count) * 100;
 
             Console.SetCursorPosition(0, Console.CursorTop);
-            Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3} - REMAINING(ETA) {4}",DownloadCounter, contactList.Count, (DownloadCounter/ contactList.Count)*100, StopWatch.Elapsed, remaining));
+            Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3} - REMAINING(ETA) {4}",DownloadCounter, contactList.Count, percentage, StopWatch.Elapsed, remaining));
 
             var account = accountTask.Result;
             string json = JsonConvert.SerializeObject(account, Formatting.Indented);
@@ -197,9 +198,21 @@ namespace EOSAccountAnalyzer
 
             using (StreamWriter sw = File.CreateText(BalanceFile))
             {
-                foreach (var file in Directory.GetFiles(DownloadDirectory))
+                StopWatch.Restart();
+                int counter = 0;
+                var fileList = Directory.GetFiles(DownloadDirectory);
+                foreach (var file in fileList)
                 {
-                    logger.Info("Process:  {0}", file);
+                    counter++;
+
+                    Console.SetCursorPosition(0, Console.CursorTop);
+                    var percentage = (DownloadCounter / contactList.Count) * 100;
+                    Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, fileList.Length, percentage,StopWatch.Elapsed));
+
+                    //Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, file.Count, "x", StopWatch.Elapsed));
+
+
+                    //logger.Info("Process:  {0}", file);
                     var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
                     var account_name = account.account_name;
                     string cpu_weight = "0.0000 EOS";
@@ -212,6 +225,7 @@ namespace EOSAccountAnalyzer
                     var core_liquid_balance = account.core_liquid_balance_decimal;
                     sw.WriteLine(string.Format("{0},{1},{2},{3}", account_name, cpu_weight, net_weight, core_liquid_balance));
                 }
+                Console.WriteLine();
             }
         }
 
