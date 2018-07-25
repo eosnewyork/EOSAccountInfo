@@ -79,7 +79,7 @@ namespace EOSAccountAnalyzer
 
     public class ExpandArguments
     {
-        [ArgDefaultValue("contacts.txt")]
+        //[ArgDefaultValue("contacts.txt")]
         [ArgDescription("The path to the file containing the flat list of contacts you'd like to expand"), ArgPosition(1)]
         public String FilePath { get; set; }
 
