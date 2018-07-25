@@ -1,9 +1,7 @@
 ﻿using Amazon;
 using Amazon.S3;
-using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using EOSNewYork.EOSCore;
-using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using NLog;
 using PowerArgs;
@@ -13,11 +11,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime.CredentialManagement;
 using Amazon.Runtime;
-using System.Text;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Diagnostics;
 
 namespace EOSAccountAnalyzer
 {
@@ -123,6 +121,8 @@ namespace EOSAccountAnalyzer
         String OutputDirectory { get; set; }
         String DownloadDirectory { get; set; }
         String BalanceFile { get; set; }
+        int DownloadCounter = 0;
+        Stopwatch StopWatch { get; set; } = new Stopwatch();
 
         public EOSInfoCollector(FileInfo file, String outputPath)
         {
@@ -157,16 +157,25 @@ namespace EOSAccountAnalyzer
             Directory.CreateDirectory(DownloadDirectory);
 
             logger.Info("Starting Async download of raw contact information", OutputDirectory);
+            StopWatch.Start();
             Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
-                        .Select(r => HandleResponse(r))
+                        .Select(r => HandleResponse(r,  contactList.Count))
                         .ToArray();
             await Task.WhenAll(requests);
             return true;
         }
 
-        private async Task HandleResponse(Task<EOSAccount_row> accountTask)
+        private async Task HandleResponse(Task<EOSAccount_row> accountTask,int count)
         {
-            Console.Write('.');
+            Interlocked.Increment(ref DownloadCounter);
+
+            var eta = (StopWatch.Elapsed.TotalSeconds / DownloadCounter) * (contactList.Count - DownloadCounter);
+            int etaSeconds = Convert.ToInt32(eta);
+            TimeSpan remaining = new TimeSpan(0, 0, etaSeconds);
+
+            Console.SetCursorPosition(0, Console.CursorTop);
+            Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3} - REMAINING(ETA) {4}",DownloadCounter, contactList.Count, (DownloadCounter/ contactList.Count)*100, StopWatch.Elapsed, remaining));
+
             var account = accountTask.Result;
             string json = JsonConvert.SerializeObject(account, Formatting.Indented);
             await File.WriteAllTextAsync(Path.Combine(DownloadDirectory, account.account_name + ".txt"), json);
