@@ -201,7 +201,16 @@ namespace EOSAccountAnalyzer
                 {
                     logger.Info("Process:  {0}", file);
                     var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
-                    sw.WriteLine(string.Format("{0},{1},{2},{3}",account.account_name, account.self_delegated_bandwidth.cpu_weight, account.self_delegated_bandwidth.net_weight,account.core_liquid_balance_decimal));
+                    var account_name = account.account_name;
+                    string cpu_weight = "0.0000 EOS";
+                    string net_weight = "0.0000 EOS"; 
+                    if(account.self_delegated_bandwidth != null)
+                    {
+                        cpu_weight = account.self_delegated_bandwidth.cpu_weight;
+                        net_weight = account.self_delegated_bandwidth.net_weight;
+                    }
+                    var core_liquid_balance = account.core_liquid_balance_decimal;
+                    sw.WriteLine(string.Format("{0},{1},{2},{3}", account_name, cpu_weight, net_weight, core_liquid_balance));
                 }
             }
         }
