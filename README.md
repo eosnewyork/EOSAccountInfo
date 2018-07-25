@@ -33,8 +33,7 @@ S3profile (-S3p)    The name of the S3 profile which contains the required crede
 Example usage:
 
 ```
-dotnet EOSAccountAnalyzer.dll expand -f contacts.txt -ov true -s false -A http://api.eosnewyork.io
-
+dotnet bin/Debug/netcoreapp2.1/EOSAccountAnalyzer.dll expand -f ~/eosdata/input/accounts.txt  -ov true -s false -A http://api.eosnewyork.io -O ~/eosdata/output/
 ```
 
 ## Installation

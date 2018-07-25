@@ -199,6 +199,7 @@ namespace EOSAccountAnalyzer
             {
                 foreach (var file in Directory.GetFiles(DownloadDirectory))
                 {
+                    logger.Info("Process:  {0}", file);
                     var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
                     sw.WriteLine(string.Format("{0},{1},{2},{3}",account.account_name, account.self_delegated_bandwidth.cpu_weight, account.self_delegated_bandwidth.net_weight,account.core_liquid_balance_decimal));
                 }
