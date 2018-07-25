@@ -16,6 +16,7 @@ using Amazon.Runtime;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Diagnostics;
+using Amazon.Util;
 
 namespace EOSAccountAnalyzer
 {
@@ -260,6 +261,15 @@ namespace EOSAccountAnalyzer
             var key = dt.ToString("yyyy-MM-dd") + ".zip";
 
             logger.Info("Uploading {0} to s3://{1}/{2}",zipOutputPath, bucket, key);
+
+            logger.Info("The following AWS profiles were found:");
+            var profiles = ProfileManager.ListProfileNames();
+            foreach (var profile in profiles)
+            {
+                logger.Info("Profile: {0}", profile);
+            }
+
+
             var chain = new CredentialProfileStoreChain();
             if (chain.TryGetAWSCredentials(s3Profile, out AWSCredentials awsCredentials))
             {
