@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <Reference Include="EOSNewYork.EOSCore">
-      <HintPath>..\..\EOSDotNet\EOSNewYork.EOSCore\bin\Debug\netstandard2.0\EOSNewYork.EOSCore.dll</HintPath>
+      <HintPath>..\EOSDotNet\EOSNewYork.EOSCore\bin\Debug\netstandard2.0\EOSNewYork.EOSCore.dll</HintPath>
     </Reference>
   </ItemGroup>
 

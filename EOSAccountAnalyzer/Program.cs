@@ -62,6 +62,7 @@ namespace EOSAccountAnalyzer
                     collector.CalcTotalBalance();
                     collector.GenerateMD5();
                     collector.CompressOutput(arg.Zipoutput);
+                    if(arg.uploadtoS3)
                     collector.UploadToS3(arg.Zipoutput,arg.S3bucket, arg.S3profile);
                     logger.Info("Done");
 
@@ -111,6 +112,10 @@ namespace EOSAccountAnalyzer
         [ArgDefaultValue("publicwebsitefileupload")]
         [ArgDescription("The name of the S3 profile which contains the required credentials for upload."), ArgPosition(8)]
         public String S3profile { get; set; }
+
+        [ArgDefaultValue(true)]
+        [ArgDescription("Disable the upload to S3."), ArgPosition(8)]
+        public bool uploadtoS3 { get; set; }
 
     }
 
@@ -169,7 +174,7 @@ namespace EOSAccountAnalyzer
         private async Task HandleResponse(Task<EOSAccount_row> accountTask,int count)
         {
             Interlocked.Increment(ref DownloadCounter);
-
+            
             var eta = (StopWatch.Elapsed.TotalSeconds / DownloadCounter) * (contactList.Count - DownloadCounter);
             int etaSeconds = Convert.ToInt32(eta);
             TimeSpan remaining = new TimeSpan(0, 0, etaSeconds);
@@ -262,13 +267,14 @@ namespace EOSAccountAnalyzer
 
             logger.Info("Uploading {0} to s3://{1}/{2}",zipOutputPath, bucket, key);
 
+            /*
             logger.Info("The following AWS profiles were found:");
             var profiles = ProfileManager.ListProfileNames();
             foreach (var profile in profiles)
             {
                 logger.Info("Profile: {0}", profile);
             }
-
+            */
 
             var chain = new CredentialProfileStoreChain();
             if (chain.TryGetAWSCredentials(s3Profile, out AWSCredentials awsCredentials))

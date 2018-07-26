@@ -1,0 +1,3 @@
+[submodule "EOSDotNet"]
+	path = EOSDotNet
+	url = git@git-as-eosny:eosnewyork/EOSDotNet.git
