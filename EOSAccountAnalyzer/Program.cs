@@ -159,13 +159,14 @@ namespace EOSAccountAnalyzer
                     var filePath = Path.Combine(DownloadDirectory, contact + ".txt");
                     if (!File.Exists(filePath))
                     {
-                        Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write(string.Format("Add {0} to resume list", contact));
+                        //Console.SetCursorPosition(0, Console.CursorTop);
+                        //Console.Write(string.Format("Add {0} to resume list", contact));
+                        logger.Info("Add {0} to resume list", contact);
                         resumeContactList.Add(contact);
                     } else
                     {
                         Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write(string.Format("{0} existing record found", counter));
+                        Console.Write(string.Format("{0} existing record(s) found", counter));
                     }
                 }
                 Console.WriteLine();
