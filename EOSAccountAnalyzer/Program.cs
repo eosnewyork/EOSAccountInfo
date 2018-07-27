@@ -114,7 +114,7 @@ namespace EOSAccountAnalyzer
         public String S3profile { get; set; }
 
         [ArgDefaultValue(true)]
-        [ArgDescription("Disable the upload to S3."), ArgPosition(8)]
+        [ArgDescription("Disable the upload to S3."), ArgPosition(9)]
         public bool uploadtoS3 { get; set; }
 
     }
