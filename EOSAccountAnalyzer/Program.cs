@@ -181,15 +181,23 @@ namespace EOSAccountAnalyzer
         {
             if (Directory.Exists(OutputDirectory))
             {
-                if (overwrite && !resume)
+                if (overwrite)
                 {
                     logger.Warn("overwrite = true, Deleting existing output directory {0}", OutputDirectory);
                     Directory.Delete(OutputDirectory, true);                    
                 } else
                 {
-                    //throw new Exception("Directory exists, but overwrite option set to fale.");
-                    logger.Error("Directory exists, but overwrite option set to fale.");
-                    Environment.Exit(-1);
+                    if (resume)
+                    {
+                        logger.Info("Leave directory in tact becasue resume = true.");
+                    }
+                    else
+                    {
+                        //throw new Exception("Directory exists, but overwrite option set to fale.");
+                        logger.Error("Directory exists, but overwrite option set to fale.");
+                        Environment.Exit(-1);
+
+                    }
                 }
             }
 
