@@ -46,7 +46,7 @@ namespace EOSAccountAnalyzer
             if (File.Exists(arg.FilePath))
             {
                 FileInfo accountsFileInfo = new FileInfo(arg.FilePath);
-                EOSInfoCollector collector = new EOSInfoCollector(accountsFileInfo, arg.OutputPath);
+                EOSInfoCollector collector = new EOSInfoCollector(accountsFileInfo, arg.OutputPath, arg.Resume);
                 if(arg.SkipDownload)
                 {
                     logger.Warn("Skipping the download of data and will instead process the json files that exist in {0}", arg.OutputPath);
@@ -62,7 +62,7 @@ namespace EOSAccountAnalyzer
                     collector.CalcTotalBalance();
                     collector.GenerateMD5();
                     collector.CompressOutput(arg.Zipoutput);
-                    if(arg.uploadtoS3)
+                    if(arg.UploadtoS3)
                     collector.UploadToS3(arg.Zipoutput,arg.S3bucket, arg.S3profile);
                     logger.Info("Done");
 
@@ -113,9 +113,13 @@ namespace EOSAccountAnalyzer
         [ArgDescription("The name of the S3 profile which contains the required credentials for upload."), ArgPosition(8)]
         public String S3profile { get; set; }
 
-        [ArgDefaultValue(true)]
+        [ArgDefaultValue(false)]
         [ArgDescription("Disable the upload to S3."), ArgPosition(9)]
-        public bool uploadtoS3 { get; set; }
+        public bool UploadtoS3 { get; set; }
+
+        [ArgDefaultValue(false)]
+        [ArgDescription("Resume downloads from where you left off (if you have SkipDownload = false)."), ArgPosition(10)]
+        public bool Resume { get; set; }
 
     }
 
@@ -124,21 +128,52 @@ namespace EOSAccountAnalyzer
     {
         Logger logger = NLog.LogManager.GetCurrentClassLogger();
         List<string> contactList = new List<string>();
+        List<string> resumeContactList = new List<string>();
         String OutputDirectory { get; set; }
         String DownloadDirectory { get; set; }
         String BalanceFile { get; set; }
         int DownloadCounter = 0;
         Stopwatch StopWatch { get; set; } = new Stopwatch();
+        bool Resume { get => resume; set => resume = value; }
 
-        public EOSInfoCollector(FileInfo file, String outputPath)
+        bool resume = false;
+
+        public EOSInfoCollector(FileInfo file, String outputPath, bool resume)
         {
             OutputDirectory = outputPath;
             DownloadDirectory = Path.Combine(outputPath, "rawdata");
+            Resume = resume;
 
             logger.Info("Loding all contacts contained in \"{0}\" into memory.", file.FullName);
             var logFile = File.ReadAllLines(file.FullName);
             contactList = new List<string>(logFile);
             logger.Info("{0} contacts loaded.", contactList.Count);
+
+            if (resume)
+            {
+                logger.Info("Resume = true. Filter list to contacts not already downloaded.");
+                int counter = 0;
+                foreach (var contact in contactList)
+                {
+                    counter++;
+                    var filePath = Path.Combine(DownloadDirectory, contact + ".txt");
+                    if (!File.Exists(filePath))
+                    {
+                        Console.SetCursorPosition(0, Console.CursorTop);
+                        Console.Write(string.Format("Add {0} to resume list", contact));
+                        resumeContactList.Add(contact);
+                    } else
+                    {
+                        Console.SetCursorPosition(0, Console.CursorTop);
+                        Console.Write(string.Format("{0} existing record found", counter));
+                    }
+                }
+                Console.WriteLine();
+                logger.Info("Resume download of {0} contacts", resumeContactList.Count);
+            } 
+
+            
+
 
         }
 
@@ -146,7 +181,7 @@ namespace EOSAccountAnalyzer
         {
             if (Directory.Exists(OutputDirectory))
             {
-                if (overwrite)
+                if (overwrite && !resume)
                 {
                     logger.Warn("overwrite = true, Deleting existing output directory {0}", OutputDirectory);
                     Directory.Delete(OutputDirectory, true);                    
@@ -164,10 +199,22 @@ namespace EOSAccountAnalyzer
 
             logger.Info("Starting Async download of raw contact information", OutputDirectory);
             StopWatch.Start();
-            Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
-                        .Select(r => HandleResponse(r,  contactList.Count))
+            if(Resume)
+            {
+                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                        .Select(r => HandleResponse(r, contactList.Count))
                         .ToArray();
-            await Task.WhenAll(requests);
+                await Task.WhenAll(requests);
+            }
+            else
+            {
+                Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                        .Select(r => HandleResponse(r, contactList.Count))
+                        .ToArray();
+                await Task.WhenAll(requests);
+            }
+            
+
             return true;
         }
 
