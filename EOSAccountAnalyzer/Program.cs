@@ -229,18 +229,24 @@ namespace EOSAccountAnalyzer
         private async Task HandleResponse(Task<EOSAccount_row> accountTask,int count)
         {
             Interlocked.Increment(ref DownloadCounter);
-            
-            var eta = (StopWatch.Elapsed.TotalSeconds / DownloadCounter) * (contactList.Count - DownloadCounter);
-            int etaSeconds = Convert.ToInt32(eta);
-            TimeSpan remaining = new TimeSpan(0, 0, etaSeconds);
-            var percentage = (DownloadCounter / contactList.Count) * 100;
+
+            var countactDownloadCount = 0;
+            if (resume)
+                countactDownloadCount = resumeContactList.Count;
+            else
+                countactDownloadCount = contactList.Count;
+
+            var percentage = (DownloadCounter / countactDownloadCount) * 100;
 
             Console.SetCursorPosition(0, Console.CursorTop);
-            Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3} - REMAINING(ETA) {4}",DownloadCounter, contactList.Count, percentage, StopWatch.Elapsed, remaining));
+            Console.Write(string.Format("{0}/{1} - ELAPSED: {2} ",DownloadCounter, countactDownloadCount, StopWatch.Elapsed));
 
             var account = accountTask.Result;
             string json = JsonConvert.SerializeObject(account, Formatting.Indented);
-            await File.WriteAllTextAsync(Path.Combine(DownloadDirectory, account.account_name + ".txt"), json);
+            
+            var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
+            logger.Info("Write: {0}", fileOutputPath);
+            await File.WriteAllTextAsync(fileOutputPath, json);
         }
 
         public bool ValidateFileCount()
