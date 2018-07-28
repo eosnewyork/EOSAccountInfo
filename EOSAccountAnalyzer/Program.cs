@@ -261,6 +261,13 @@ namespace EOSAccountAnalyzer
                 var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
                 logger.Debug("Write: {0}", fileOutputPath);
                 await File.WriteAllTextAsync(fileOutputPath, json);
+
+                //This adds a bit more overhead for each file, but gives added peace of mind. 
+                FileInfo fileInfo = new FileInfo(fileOutputPath);
+                if (fileInfo.Length == 0)
+                {
+                    throw new Exception(string.Format("The file associated with account \"{0}\" is 0 bytes", account.account_name));
+                }
             }
             catch (Exception ex)
             {
@@ -295,6 +302,8 @@ namespace EOSAccountAnalyzer
             {
                 StopWatch.Restart();
                 int counter = 0;
+                int creationDateExceptionCounter = 0;
+                int exportCounter = 0;
                 sw.WriteLine(string.Format("{0},{1}", "account_name", "total_eos"));
             
                 foreach (var contact in contactList.OrderBy(x => x).ToList())
@@ -315,10 +324,12 @@ namespace EOSAccountAnalyzer
                     var account_name = account.account_name;
                     if (account.created_datetime > UTCMidnight)
                     {
+                        creationDateExceptionCounter++;
                         logger.Info("Account {0} will be excluded as it was created after midnight at {1}", account_name, account.created_datetime);
                         continue;
                     }
   
+                    
                     decimal cpu_weight_decimal = 0;
                     decimal net_weight_decimal = 0;
                     if (account.self_delegated_bandwidth != null)
@@ -328,9 +339,13 @@ namespace EOSAccountAnalyzer
                     }
 
                     var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal;
-                    sw.WriteLine(string.Format("{0},{1}", account_name, balance));
+                    sw.WriteLine(string.Format("{0},{1:n4}", account_name, balance));
                     totalEOS = totalEOS + balance;
+                    exportCounter++;
                 }
+                logger.Info("Total accounts in source file = {0}", contactList.Count);
+                logger.Info("Accounts excluded due to creating date = {0}", creationDateExceptionCounter);
+                logger.Info("Accounts exported = {0}", exportCounter);
                 logger.Info("Total EOS = {0}", totalEOS);
                 Console.WriteLine();
             }
