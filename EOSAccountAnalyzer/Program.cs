@@ -155,7 +155,7 @@ namespace EOSAccountAnalyzer
 
             if (resume)
             {
-                logger.Info("Resume = true. Filter list to contacts not already downloaded.");
+                logger.Info("Resume = true. Filter download list to contacts not already downloaded.");
                 int counter = 0;
                 foreach (var contact in contactList)
                 {
@@ -249,16 +249,17 @@ namespace EOSAccountAnalyzer
                 else
                     countactDownloadCount = contactList.Count;
 
-                var percentage = (DownloadCounter / countactDownloadCount) * 100;
+                var percentage = ((float)DownloadCounter / (float)countactDownloadCount) * 100.00;
+
 
                 Console.SetCursorPosition(0, Console.CursorTop);
-                Console.Write(string.Format("{0:n0}/{1:n0} - ELAPSED: {2} ", DownloadCounter, countactDownloadCount, StopWatch.Elapsed));
+                Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3} ", DownloadCounter, countactDownloadCount, percentage,StopWatch.Elapsed));
 
                 var account = accountTask.Result;
                 string json = JsonConvert.SerializeObject(account, Formatting.Indented);
 
                 var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
-                logger.Info("Write: {0}", fileOutputPath);
+                logger.Debug("Write: {0}", fileOutputPath);
                 await File.WriteAllTextAsync(fileOutputPath, json);
             }
             catch (Exception ex)
@@ -285,6 +286,7 @@ namespace EOSAccountAnalyzer
 
             var UTCToday = DateTime.Today.ToUniversalTime();
             var UTCMidnight = UTCToday.AddHours(-UTCToday.Hour);
+            decimal totalEOS = 0;
 
             logger.Info("Accounts created after midnight UTC ({0}) will be removed: {1}", UTCMidnight.ToString("yyyy-MM-dd HH:mm:ss \"GMT\"zzz") ,excludeAfterMidnight);
             BalanceFile = Path.Combine(OutputDirectory, "balances.csv");
@@ -313,18 +315,10 @@ namespace EOSAccountAnalyzer
                     var account_name = account.account_name;
                     if (account.created_datetime > UTCMidnight)
                     {
-                        logger.Info("Account {0} will be excuded as it was created after midnight at {1}", account_name, account.created_datetime);
+                        logger.Info("Account {0} will be excluded as it was created after midnight at {1}", account_name, account.created_datetime);
                         continue;
                     }
-                    /*
-                    string cpu_weight = "0.0000 EOS";
-                    string net_weight = "0.0000 EOS";
-                    if (account.self_delegated_bandwidth != null)
-                    {
-                        cpu_weight = account.self_delegated_bandwidth.cpu_weight;
-                        net_weight = account.self_delegated_bandwidth.net_weight;
-                    }
-                    */
+  
                     decimal cpu_weight_decimal = 0;
                     decimal net_weight_decimal = 0;
                     if (account.self_delegated_bandwidth != null)
@@ -335,8 +329,9 @@ namespace EOSAccountAnalyzer
 
                     var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal;
                     sw.WriteLine(string.Format("{0},{1}", account_name, balance));
+                    totalEOS = totalEOS + balance;
                 }
-
+                logger.Info("Total EOS = {0}", totalEOS);
                 Console.WriteLine();
             }
         }
