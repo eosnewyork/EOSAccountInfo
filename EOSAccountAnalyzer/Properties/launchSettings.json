@@ -2,7 +2,7 @@
   "profiles": {
     "EOSAccountAnalyzer": {
       "commandName": "Project",
-      "commandLineArgs": "expand -f contacts.txt -o output -ov true -A http://api.eosnewyork.io -R true"
+      "commandLineArgs": "expand -f contacts.txt -o output -ov true -A http://api.eosnewyork.io "
     }
   }
 }

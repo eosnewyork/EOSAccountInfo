@@ -339,7 +339,7 @@ namespace EOSAccountAnalyzer
                     }
 
                     var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal;
-                    sw.WriteLine(string.Format("{0},{1:n4}", account_name, balance));
+                    sw.WriteLine(string.Format("{0},{1:0.0000}", account_name, balance));
                     totalEOS = totalEOS + balance;
                     exportCounter++;
                 }
