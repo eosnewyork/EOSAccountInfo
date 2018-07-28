@@ -59,7 +59,7 @@ namespace EOSAccountAnalyzer
                 if (collector.ValidateFileCount())
                 {
                     logger.Info("Calculting the balance for each account");
-                    collector.CalcTotalBalance();
+                    collector.CalcTotalBalance(arg.ExcludeAccountsCreatedAfterMidnightUTC);
                     collector.GenerateMD5();
                     collector.CompressOutput(arg.Zipoutput);
                     if(arg.UploadtoS3)
@@ -85,7 +85,7 @@ namespace EOSAccountAnalyzer
         [ArgDescription("The path to the file containing the flat list of contacts you'd like to expand"), ArgPosition(1)]
         public String FilePath { get; set; }
 
-        [ArgDefaultValue("output")]
+        //[ArgDefaultValue("output")]
         [ArgDescription("The path to the directory you'd like to output to"), ArgPosition(2)]
         public String OutputPath { get; set; }
 
@@ -120,6 +120,10 @@ namespace EOSAccountAnalyzer
         [ArgDefaultValue(false)]
         [ArgDescription("Resume downloads from where you left off (if you have SkipDownload = false)."), ArgPosition(10)]
         public bool Resume { get; set; }
+
+        [ArgDefaultValue(true)]
+        [ArgDescription("Exclude accounts that were created after midnight UTC. All accounts will be processed but final output will exclude those created after midnight UTC"), ArgPosition(10)]
+        public bool ExcludeAccountsCreatedAfterMidnightUTC { get; set; }
 
     }
 
@@ -173,9 +177,6 @@ namespace EOSAccountAnalyzer
                 logger.Info("Resume download of {0} contacts", resumeContactList.Count);
             } 
 
-            
-
-
         }
 
         public async Task<bool> StartAsync(bool overwrite, Uri apihost)
@@ -197,14 +198,23 @@ namespace EOSAccountAnalyzer
                         //throw new Exception("Directory exists, but overwrite option set to fale.");
                         logger.Error("Directory exists, but overwrite option set to fale.");
                         Environment.Exit(-1);
-
                     }
                 }
             }
 
-            logger.Info("Creating output directory \"{0}\"", OutputDirectory);
-            Directory.CreateDirectory(OutputDirectory);
-            Directory.CreateDirectory(DownloadDirectory);
+            if(!Directory.Exists(OutputDirectory))
+            {
+                logger.Info("Creating output directory \"{0}\"", OutputDirectory);
+                Directory.CreateDirectory(OutputDirectory);
+            }
+           
+
+            if(!Directory.Exists(DownloadDirectory))
+            {
+                logger.Info("Creating downloads directory \"{0}\"", DownloadDirectory);
+                Directory.CreateDirectory(DownloadDirectory);
+            }
+
 
             logger.Info("Starting Async download of raw contact information", OutputDirectory);
             StopWatch.Start();
@@ -229,25 +239,35 @@ namespace EOSAccountAnalyzer
 
         private async Task HandleResponse(Task<EOSAccount_row> accountTask,int count)
         {
-            Interlocked.Increment(ref DownloadCounter);
+            try
+            {
+                Interlocked.Increment(ref DownloadCounter);
 
-            var countactDownloadCount = 0;
-            if (resume)
-                countactDownloadCount = resumeContactList.Count;
-            else
-                countactDownloadCount = contactList.Count;
+                var countactDownloadCount = 0;
+                if (resume)
+                    countactDownloadCount = resumeContactList.Count;
+                else
+                    countactDownloadCount = contactList.Count;
 
-            var percentage = (DownloadCounter / countactDownloadCount) * 100;
+                var percentage = (DownloadCounter / countactDownloadCount) * 100;
 
-            Console.SetCursorPosition(0, Console.CursorTop);
-            Console.Write(string.Format("{0}/{1} - ELAPSED: {2} ",DownloadCounter, countactDownloadCount, StopWatch.Elapsed));
+                Console.SetCursorPosition(0, Console.CursorTop);
+                Console.Write(string.Format("{0:n0}/{1:n0} - ELAPSED: {2} ", DownloadCounter, countactDownloadCount, StopWatch.Elapsed));
 
-            var account = accountTask.Result;
-            string json = JsonConvert.SerializeObject(account, Formatting.Indented);
-            
-            var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
-            logger.Info("Write: {0}", fileOutputPath);
-            await File.WriteAllTextAsync(fileOutputPath, json);
+                var account = accountTask.Result;
+                string json = JsonConvert.SerializeObject(account, Formatting.Indented);
+
+                var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
+                logger.Info("Write: {0}", fileOutputPath);
+                await File.WriteAllTextAsync(fileOutputPath, json);
+            }
+            catch (Exception ex)
+            {
+                logger.Error("Error while fetching account \"{0}\"",accountTask.Result.account_name);
+                logger.Error(ex.Message);
+                Environment.Exit(-1);
+            }
+
         }
 
         public bool ValidateFileCount()
@@ -260,22 +280,30 @@ namespace EOSAccountAnalyzer
             return match;
         }
 
-        public void CalcTotalBalance()
+        public void CalcTotalBalance(bool excludeAfterMidnight)
         {
+
+            var UTCToday = DateTime.Today.ToUniversalTime();
+            var UTCMidnight = UTCToday.AddHours(-UTCToday.Hour);
+
+            logger.Info("Accounts created after midnight UTC ({0}) will be removed: {1}", UTCMidnight.ToString("yyyy-MM-dd HH:mm:ss \"GMT\"zzz") ,excludeAfterMidnight);
             BalanceFile = Path.Combine(OutputDirectory, "balances.csv");
 
             using (StreamWriter sw = File.CreateText(BalanceFile))
             {
                 StopWatch.Restart();
                 int counter = 0;
-                var fileList = Directory.GetFiles(DownloadDirectory);
-                foreach (var file in fileList)
+                sw.WriteLine(string.Format("{0},{1}", "account_name", "total_eos"));
+            
+                foreach (var contact in contactList.OrderBy(x => x).ToList())
                 {
+                    var file = Path.Combine(DownloadDirectory, contact + ".txt");
+
                     counter++;
 
                     Console.SetCursorPosition(0, Console.CursorTop);
-                    var percentage = (DownloadCounter / contactList.Count) * 100;
-                    Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, fileList.Length, percentage,StopWatch.Elapsed));
+                    var percentage = ((float)counter / (float)contactList.Count) * 100.00;
+                    Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3}", counter, contactList.Count, percentage, StopWatch.Elapsed));
 
                     //Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, file.Count, "x", StopWatch.Elapsed));
 
@@ -283,16 +311,32 @@ namespace EOSAccountAnalyzer
                     //logger.Info("Process:  {0}", file);
                     var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
                     var account_name = account.account_name;
+                    if (account.created_datetime > UTCMidnight)
+                    {
+                        logger.Info("Account {0} will be excuded as it was created after midnight at {1}", account_name, account.created_datetime);
+                        continue;
+                    }
+                    /*
                     string cpu_weight = "0.0000 EOS";
-                    string net_weight = "0.0000 EOS"; 
-                    if(account.self_delegated_bandwidth != null)
+                    string net_weight = "0.0000 EOS";
+                    if (account.self_delegated_bandwidth != null)
                     {
                         cpu_weight = account.self_delegated_bandwidth.cpu_weight;
                         net_weight = account.self_delegated_bandwidth.net_weight;
                     }
-                    var core_liquid_balance = account.core_liquid_balance_decimal;
-                    sw.WriteLine(string.Format("{0},{1},{2},{3}", account_name, cpu_weight, net_weight, core_liquid_balance));
+                    */
+                    decimal cpu_weight_decimal = 0;
+                    decimal net_weight_decimal = 0;
+                    if (account.self_delegated_bandwidth != null)
+                    {
+                        cpu_weight_decimal = account.self_delegated_bandwidth.cpu_weight_decimal;
+                        net_weight_decimal = account.self_delegated_bandwidth.net_weight_decimal;
+                    }
+
+                    var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal;
+                    sw.WriteLine(string.Format("{0},{1}", account_name, balance));
                 }
+
                 Console.WriteLine();
             }
         }
