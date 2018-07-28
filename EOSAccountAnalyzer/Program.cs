@@ -77,6 +77,83 @@ namespace EOSAccountAnalyzer
                 Environment.Exit(-1);
             }
         }
+
+        [ArgActionMethod, ArgDescription("Compare two balance files")]
+        public void Compare([ArgRequired]CompareArguments arg)
+        {
+            logger.Info("File1 \"{0}\".", arg.FilePath);
+            logger.Info("File2 \"{0}\".", arg.FilePath2);
+
+            if(!File.Exists(arg.FilePath))
+            {
+                logger.Error("File1 \"{0}\" does not exist or is inaccessible", arg.FilePath);
+                Environment.Exit(-1);
+            }
+
+            if (!File.Exists(arg.FilePath2))
+            {
+                logger.Error("File2 \"{0}\" does not exist or is inaccessible", arg.FilePath2);
+                Environment.Exit(-1);
+            }
+
+            logger.Info("Loading file 1");
+            List<CSVAccountValue> file1List = File.ReadAllLines(arg.FilePath)
+                               .Skip(1)
+                               .Select(v => CSVAccountValue.FromCsv(v))
+                               .ToList();
+
+            logger.Info("Loading file 2");
+            List<CSVAccountValue> file2List = File.ReadAllLines(arg.FilePath2)
+                   .Skip(1)
+                   .Select(v => CSVAccountValue.FromCsv(v))
+                   .ToList();
+
+            logger.Info("Convert file 1 to dictionary");
+            Dictionary<string, string> file1Dictionary = new Dictionary<string, string>();
+            foreach (var row in file1List)
+            {
+                file1Dictionary.Add(row.account_name, row.total_eos);
+            }
+
+            logger.Info("Convert file 2 to dictionary");
+            Dictionary<string, string> file2Dictionary = new Dictionary<string, string>();
+            foreach (var row in file2List)
+            {
+                file2Dictionary.Add(row.account_name, row.total_eos);
+            }
+
+            //We're assuming all the keys match and only the values differ
+            foreach (var file1account in file1Dictionary.Keys)
+            {
+
+                    if(file1Dictionary[file1account] != file2Dictionary[file1account])
+                    {
+                        logger.Warn("DIFF: {0}\t{1}\t{2}", file1account, file1Dictionary[file1account], file2Dictionary[file1account]);
+                    }
+                
+            }
+
+            /*
+            var diffDictionary = file2Dictionary.Where(entry => file1Dictionary[entry.Key] != entry.Value)
+                 .ToDictionary(entry => entry.Key, entry => entry.Value);
+                 */
+        }
+    }
+
+
+    class CSVAccountValue
+    {
+        public string account_name;
+        public string total_eos;
+
+        public static CSVAccountValue FromCsv(string csvLine)
+        {
+            string[] values = csvLine.Split(',');
+            CSVAccountValue csvValues = new CSVAccountValue();
+            csvValues.account_name = values[0];
+            csvValues.total_eos = values[1];
+            return csvValues;
+        }
     }
 
     public class ExpandArguments
@@ -127,6 +204,14 @@ namespace EOSAccountAnalyzer
 
     }
 
+    public class CompareArguments
+    {
+        [ArgDescription("The path to the 1st file"), ArgPosition(1)]
+        public String FilePath { get; set; }
+
+        [ArgDescription("The path to the 2st file"), ArgPosition(2)]
+        public String FilePath2 { get; set; }
+    }
 
     public class EOSInfoCollector
     {
@@ -338,7 +423,16 @@ namespace EOSAccountAnalyzer
                         net_weight_decimal = account.self_delegated_bandwidth.net_weight_decimal;
                     }
 
-                    var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal;
+                    decimal refund_request_net_amount_decimal = 0;
+                    decimal refund_request_cpu_amount_decimal = 0;
+
+                    if (account.refund_request != null)
+                    {
+                        refund_request_net_amount_decimal = account.refund_request.net_amount_decimal;
+                        refund_request_cpu_amount_decimal = account.refund_request.cpu_amount_decimal;
+                    }
+
+                    var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal + refund_request_net_amount_decimal + refund_request_cpu_amount_decimal;
                     sw.WriteLine(string.Format("{0},{1:0.0000}", account_name, balance));
                     totalEOS = totalEOS + balance;
                     exportCounter++;
