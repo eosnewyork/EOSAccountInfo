@@ -143,6 +143,7 @@ namespace EOSAccountAnalyzer
 
     class CSVAccountValue
     {
+        public string creation_time;
         public string account_name;
         public string total_eos;
 
@@ -150,8 +151,9 @@ namespace EOSAccountAnalyzer
         {
             string[] values = csvLine.Split(',');
             CSVAccountValue csvValues = new CSVAccountValue();
-            csvValues.account_name = values[0];
-            csvValues.total_eos = values[1];
+            csvValues.creation_time = values[0];
+            csvValues.account_name = values[1];
+            csvValues.total_eos = values[2];
             return csvValues;
         }
     }
