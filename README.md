@@ -12,7 +12,7 @@ The application takes as input a flat list of account names. It then:
 1. Install .NET core on your OS (Yes, this really works on Linux, and macOS) - easy to follow instructions can be found here
 https://www.microsoft.com/net/learn/get-started
 
-2. Clone the supporting EOSDotNet prohject, this is used by the application
+2. Clone the supporting EOSDotNet project, this is used by the application
 ```
 git clone https://github.com/eosnewyork/EOSDotNet.git
 cd /EOSDotNet
