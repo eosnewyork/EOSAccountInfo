@@ -389,7 +389,7 @@ namespace EOSAccountAnalyzer
                 int counter = 0;
                 int creationDateExceptionCounter = 0;
                 int exportCounter = 0;
-                sw.WriteLine(string.Format("{0},{1}", "account_name", "total_eos"));
+                sw.WriteLine(string.Format("{0},{1},{2}", "creation_time", "account_name", "total_eos"));
             
                 foreach (var contact in contactList.OrderBy(x => x).ToList())
                 {
@@ -432,8 +432,13 @@ namespace EOSAccountAnalyzer
                         refund_request_cpu_amount_decimal = account.refund_request.cpu_amount_decimal;
                     }
 
+                    var creationMS = account.created_datetime.ToString("ffffff");
+                    if (creationMS == "000000")
+                        creationMS = string.Empty;
+                    else
+                        creationMS = "." + creationMS;
                     var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal + refund_request_net_amount_decimal + refund_request_cpu_amount_decimal;
-                    sw.WriteLine(string.Format("{0},{1:0.0000}", account_name, balance));
+                    sw.WriteLine(string.Format("{0},{1},{2:0.0000}", account.created_datetime.ToString("yyyy-MM-dd hh:mm:ss")+creationMS,account_name, balance));
                     totalEOS = totalEOS + balance;
                     exportCounter++;
                 }
