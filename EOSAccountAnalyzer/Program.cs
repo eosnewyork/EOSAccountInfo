@@ -223,6 +223,7 @@ namespace EOSAccountAnalyzer
         String OutputDirectory { get; set; }
         String DownloadDirectory { get; set; }
         String BalanceFile { get; set; }
+        String VoterFile { get; set; }
         int DownloadCounter = 0;
         Stopwatch StopWatch { get; set; } = new Stopwatch();
         bool Resume { get => resume; set => resume = value; }
@@ -305,21 +306,39 @@ namespace EOSAccountAnalyzer
 
             logger.Info("Starting Async download of raw contact information", OutputDirectory);
             StopWatch.Start();
-            if(Resume)
+            Task[] requests = null;
+            if (Resume)
             {
-                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
                         .Select(r => HandleResponse(r, contactList.Count))
                         .ToArray();
-                await Task.WhenAll(requests);
+                
             }
             else
             {
-                Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
                         .Select(r => HandleResponse(r, contactList.Count))
                         .ToArray();
-                await Task.WhenAll(requests);
             }
-            
+
+            Task allTasks = Task.WhenAll(requests);
+            try
+            {
+                allTasks.Wait();
+            }
+            catch (Exception ex)
+            {
+                logger.Error("WhenAllTasks Exception: {0}", ex.ToString());
+                Environment.Exit(-1);
+            }
+
+            logger.Info("WhenAllTasks status: {0}", allTasks.Status);
+
+            if (allTasks.Exception != null)
+            {
+                throw allTasks.Exception;
+            }
+
 
             return true;
         }
@@ -384,71 +403,92 @@ namespace EOSAccountAnalyzer
 
             logger.Info("Accounts created after midnight UTC ({0}) will be removed: {1}", UTCMidnight.ToString("yyyy-MM-dd HH:mm:ss \"GMT\"zzz") ,excludeAfterMidnight);
             BalanceFile = Path.Combine(OutputDirectory, "balances.csv");
+            VoterFile = Path.Combine(OutputDirectory, "voters.csv");
 
-            using (StreamWriter sw = File.CreateText(BalanceFile))
+
+            using (StreamWriter voterFileStream = File.CreateText(VoterFile))
             {
-                StopWatch.Restart();
-                int counter = 0;
-                int creationDateExceptionCounter = 0;
-                int exportCounter = 0;
-                sw.WriteLine(string.Format("{0},{1},{2}", "creation_time", "account_name", "total_eos"));
-            
-                foreach (var contact in contactList.OrderBy(x => x).ToList())
+
+                using (StreamWriter balanceFileStream = File.CreateText(BalanceFile))
                 {
-                    var file = Path.Combine(DownloadDirectory, contact + ".txt");
+                    StopWatch.Restart();
+                    int counter = 0;
+                    int creationDateExceptionCounter = 0;
+                    int exportCounter = 0;
+                    balanceFileStream.WriteLine(string.Format("{0},{1},{2}", "creation_time", "account_name", "total_eos"));
 
-                    counter++;
-
-                    Console.SetCursorPosition(0, Console.CursorTop);
-                    var percentage = ((float)counter / (float)contactList.Count) * 100.00;
-                    Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3}", counter, contactList.Count, percentage, StopWatch.Elapsed));
-
-                    //Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, file.Count, "x", StopWatch.Elapsed));
-
-
-                    //logger.Info("Process:  {0}", file);
-                    var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
-                    var account_name = account.account_name;
-                    if (account.created_datetime > UTCMidnight)
+                    foreach (var contact in contactList.OrderBy(x => x).ToList())
                     {
-                        creationDateExceptionCounter++;
-                        logger.Info("Account {0} will be excluded as it was created after midnight at {1}", account_name, account.created_datetime);
-                        continue;
-                    }
-  
-                    
-                    decimal cpu_weight_decimal = 0;
-                    decimal net_weight_decimal = 0;
-                    if (account.self_delegated_bandwidth != null)
-                    {
-                        cpu_weight_decimal = account.self_delegated_bandwidth.cpu_weight_decimal;
-                        net_weight_decimal = account.self_delegated_bandwidth.net_weight_decimal;
+                        var file = Path.Combine(DownloadDirectory, contact + ".txt");
+
+                        counter++;
+
+                        Console.SetCursorPosition(0, Console.CursorTop);
+                        var percentage = ((float)counter / (float)contactList.Count) * 100.00;
+                        Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3}", counter, contactList.Count, percentage, StopWatch.Elapsed));
+
+                        //Console.Write(string.Format("{0}/{1} ({2}%) - ELAPSED: {3}", counter, file.Count, "x", StopWatch.Elapsed));
+
+
+                        //logger.Info("Process:  {0}", file);
+                        var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
+                        var account_name = account.account_name;
+                        if (account.created_datetime > UTCMidnight)
+                        {
+                            creationDateExceptionCounter++;
+                            logger.Info("Account {0} will be excluded as it was created after midnight at {1}", account_name, account.created_datetime);
+                            continue;
+                        }
+
+
+                        decimal cpu_weight_decimal = 0;
+                        decimal net_weight_decimal = 0;
+                        if (account.self_delegated_bandwidth != null)
+                        {
+                            cpu_weight_decimal = account.self_delegated_bandwidth.cpu_weight_decimal;
+                            net_weight_decimal = account.self_delegated_bandwidth.net_weight_decimal;
+                        }
+
+                        decimal refund_request_net_amount_decimal = 0;
+                        decimal refund_request_cpu_amount_decimal = 0;
+
+                        if (account.refund_request != null)
+                        {
+                            refund_request_net_amount_decimal = account.refund_request.net_amount_decimal;
+                            refund_request_cpu_amount_decimal = account.refund_request.cpu_amount_decimal;
+                        }
+
+                        var creationMS = account.created_datetime.ToString("ffffff");
+                        if (creationMS == "000000")
+                            creationMS = string.Empty;
+                        else
+                            creationMS = "." + creationMS;
+                        var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal + refund_request_net_amount_decimal + refund_request_cpu_amount_decimal;
+                        balanceFileStream.WriteLine(string.Format("{0},{1},{2:0.0000}", account.created_datetime.ToString("yyyy-MM-dd hh:mm:ss") + creationMS, account_name, balance));
+
+                        if(account.voter_info!=null)
+                        {
+                            string producerlist = string.Empty;
+                            if(account.voter_info.producers != null)
+                            {
+                                producerlist = String.Join(",", account.voter_info.producers.Select(x => x.ToString()).ToArray());
+                            }
+                            voterFileStream.WriteLine(string.Format("{0}\t{1}\t{2}", account_name, account.voter_info.staked, producerlist));
+                        }
+                        
+                        
+
+                        totalEOS = totalEOS + balance;
+                        exportCounter++;
                     }
 
-                    decimal refund_request_net_amount_decimal = 0;
-                    decimal refund_request_cpu_amount_decimal = 0;
-
-                    if (account.refund_request != null)
-                    {
-                        refund_request_net_amount_decimal = account.refund_request.net_amount_decimal;
-                        refund_request_cpu_amount_decimal = account.refund_request.cpu_amount_decimal;
-                    }
-
-                    var creationMS = account.created_datetime.ToString("ffffff");
-                    if (creationMS == "000000")
-                        creationMS = string.Empty;
-                    else
-                        creationMS = "." + creationMS;
-                    var balance = account.core_liquid_balance_ulong + cpu_weight_decimal + net_weight_decimal + refund_request_net_amount_decimal + refund_request_cpu_amount_decimal;
-                    sw.WriteLine(string.Format("{0},{1},{2:0.0000}", account.created_datetime.ToString("yyyy-MM-dd hh:mm:ss")+creationMS,account_name, balance));
-                    totalEOS = totalEOS + balance;
-                    exportCounter++;
+                    logger.Info("Total accounts in source file = {0}", contactList.Count);
+                    logger.Info("Accounts excluded due to creating date = {0}", creationDateExceptionCounter);
+                    logger.Info("Accounts exported = {0}", exportCounter);
+                    logger.Info("Total EOS = {0}", totalEOS);
+                    Console.WriteLine();
                 }
-                logger.Info("Total accounts in source file = {0}", contactList.Count);
-                logger.Info("Accounts excluded due to creating date = {0}", creationDateExceptionCounter);
-                logger.Info("Accounts exported = {0}", exportCounter);
-                logger.Info("Total EOS = {0}", totalEOS);
-                Console.WriteLine();
+
             }
         }
 
