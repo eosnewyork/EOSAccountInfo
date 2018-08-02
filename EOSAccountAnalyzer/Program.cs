@@ -224,7 +224,7 @@ namespace EOSAccountAnalyzer
         String DownloadDirectory { get; set; }
         String BalanceFile { get; set; }
         String VoterFile { get; set; }
-        int DownloadCounter = 0;
+        int CompletedDownloadCounter = 0;
         Stopwatch StopWatch { get; set; } = new Stopwatch();
         bool Resume { get => resume; set => resume = value; }
 
@@ -347,7 +347,7 @@ namespace EOSAccountAnalyzer
         {
             try
             {
-                Interlocked.Increment(ref DownloadCounter);
+                
 
                 var countactDownloadCount = 0;
                 if (resume)
@@ -355,11 +355,11 @@ namespace EOSAccountAnalyzer
                 else
                     countactDownloadCount = contactList.Count;
 
-                var percentage = ((float)DownloadCounter / (float)countactDownloadCount) * 100.00;
+                var percentage = ((float)CompletedDownloadCounter / (float)countactDownloadCount) * 100.00;
 
 
                 Console.SetCursorPosition(0, Console.CursorTop);
-                Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3} ", DownloadCounter, countactDownloadCount, percentage,StopWatch.Elapsed));
+                Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3} ", CompletedDownloadCounter, countactDownloadCount, percentage,StopWatch.Elapsed));
 
                 var account = accountTask.Result;
                 string json = JsonConvert.SerializeObject(account, Formatting.Indented);
@@ -367,6 +367,8 @@ namespace EOSAccountAnalyzer
                 var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
                 logger.Debug("Write: {0}", fileOutputPath);
                 await File.WriteAllTextAsync(fileOutputPath, json);
+
+                Interlocked.Increment(ref CompletedDownloadCounter);
 
                 //This adds a bit more overhead for each file, but gives added peace of mind. 
                 FileInfo fileInfo = new FileInfo(fileOutputPath);
