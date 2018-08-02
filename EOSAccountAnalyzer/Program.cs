@@ -435,7 +435,7 @@ namespace EOSAccountAnalyzer
                         //logger.Info("Process:  {0}", file);
                         var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
                         var account_name = account.account_name;
-                        if (account.created_datetime > UTCMidnight)
+                        if (account.created_datetime > UTCMidnight & excludeAfterMidnight)
                         {
                             creationDateExceptionCounter++;
                             logger.Info("Account {0} will be excluded as it was created after midnight at {1}", account_name, account.created_datetime);
