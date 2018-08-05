@@ -53,7 +53,16 @@ namespace EOSAccountAnalyzer
                 }
                 else
                 {
-                    var fetchfiles = collector.StartAsync(arg.Overwrite, arg.Apihost).Result;
+                    logger.Info("Async: {0}", arg.Async);
+                    if(arg.Async)
+                    {
+                        var fetchfiles = collector.StartAsyncDownload(arg.Overwrite, arg.Apihost).Result;
+                    }
+                    else
+                    {
+                        var fetchfiles = collector.StartDownload(arg.Overwrite, arg.Apihost).Result;
+                    }
+
                 }               
                 Console.WriteLine();
                 if (collector.ValidateFileCount())
@@ -204,6 +213,10 @@ namespace EOSAccountAnalyzer
         [ArgDescription("Exclude accounts that were created after midnight UTC. All accounts will be processed but final output will exclude those created after midnight UTC"), ArgPosition(10)]
         public bool ExcludeAccountsCreatedAfterMidnightUTC { get; set; }
 
+        [ArgDefaultValue(true)]
+        [ArgDescription("Async download account information. Used for performance debugging."), ArgPosition(11)]
+        public bool Async { get; set; }
+
     }
 
     public class CompareArguments
@@ -266,15 +279,63 @@ namespace EOSAccountAnalyzer
 
         }
 
-        public async Task<bool> StartAsync(bool overwrite, Uri apihost)
+        public async Task<bool> StartDownload(bool overwrite, Uri apihost)
+        {
+            ValidateDestinationIsReadyForDownload(overwrite);
+            List<string> clist = null;
+            if (Resume)
+            {
+                clist = resumeContactList;
+            }
+            else
+            {
+                clist = contactList;
+            }
+
+            foreach (var contact in clist)
+            {
+                var accountRow = new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = contact }).Result;
+                await HandleDownloadResponse(accountRow, contact);
+            }
+
+            return true;
+        }
+
+        public async Task<bool> StartAsyncDownload(bool overwrite, Uri apihost)
+        {
+            ValidateDestinationIsReadyForDownload(overwrite);
+
+            logger.Info("Starting Async download of raw contact information", OutputDirectory);
+            StopWatch.Start();
+            if (Resume)
+            {
+                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                        .Select(r => HandleAsyncDownloadResponse(r))
+                        .ToArray();
+                await Task.WhenAll(requests);
+            }
+            else
+            {
+                Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                        .Select(r => HandleAsyncDownloadResponse(r))
+                        .ToArray();
+                await Task.WhenAll(requests);
+
+            }
+
+            return true;
+        }
+
+        private void ValidateDestinationIsReadyForDownload(bool overwrite)
         {
             if (Directory.Exists(OutputDirectory))
             {
                 if (overwrite)
                 {
                     logger.Warn("overwrite = true, Deleting existing output directory {0}", OutputDirectory);
-                    Directory.Delete(OutputDirectory, true);                    
-                } else
+                    Directory.Delete(OutputDirectory, true);
+                }
+                else
                 {
                     if (resume)
                     {
@@ -289,45 +350,32 @@ namespace EOSAccountAnalyzer
                 }
             }
 
-            if(!Directory.Exists(OutputDirectory))
+            if (!Directory.Exists(OutputDirectory))
             {
                 logger.Info("Creating output directory \"{0}\"", OutputDirectory);
                 Directory.CreateDirectory(OutputDirectory);
             }
-           
 
-            if(!Directory.Exists(DownloadDirectory))
+
+            if (!Directory.Exists(DownloadDirectory))
             {
                 logger.Info("Creating downloads directory \"{0}\"", DownloadDirectory);
                 Directory.CreateDirectory(DownloadDirectory);
             }
-
-
-            logger.Info("Starting Async download of raw contact information", OutputDirectory);
-            StopWatch.Start();
-            if(Resume)
-            {
-                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
-                        .Select(r => HandleResponse(r, contactList.Count))
-                        .ToArray();
-                await Task.WhenAll(requests);
-            }
-            else
-            {
-                Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
-                        .Select(r => HandleResponse(r, contactList.Count))
-                        .ToArray();
-                await Task.WhenAll(requests);
-            }
-            
-
-            return true;
         }
 
-        private async Task HandleResponse(Task<EOSAccount_row> accountTask,int count)
+        private async Task HandleAsyncDownloadResponse(Task<EOSAccount_row> accountTask)
+        {
+            var account = accountTask.Result;
+            var accountName = account.account_name;
+            await HandleDownloadResponse(account, accountName);
+        }
+
+        private async Task HandleDownloadResponse(EOSAccount_row account, string accountName)
         {
             try
             {
+                //var count = contactList.Count;
                 Interlocked.Increment(ref DownloadCounter);
 
                 var countactDownloadCount = 0;
@@ -338,11 +386,9 @@ namespace EOSAccountAnalyzer
 
                 var percentage = ((float)DownloadCounter / (float)countactDownloadCount) * 100.00;
 
-
                 Console.SetCursorPosition(0, Console.CursorTop);
-                Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3} ", DownloadCounter, countactDownloadCount, percentage,StopWatch.Elapsed));
+                Console.Write(string.Format("{0:n0}/{1:n0} ({2:n0}%) - ELAPSED: {3} ", DownloadCounter, countactDownloadCount, percentage, StopWatch.Elapsed));
 
-                var account = accountTask.Result;
                 string json = JsonConvert.SerializeObject(account, Formatting.Indented);
 
                 var fileOutputPath = Path.Combine(DownloadDirectory, account.account_name + ".txt");
@@ -358,11 +404,10 @@ namespace EOSAccountAnalyzer
             }
             catch (Exception ex)
             {
-                logger.Error("Error while fetching account \"{0}\"",accountTask.Result.account_name);
+                logger.Error("Error while fetching account \"{0}\"", accountName);
                 logger.Error(ex.Message);
                 Environment.Exit(-1);
             }
-
         }
 
         public bool ValidateFileCount()
