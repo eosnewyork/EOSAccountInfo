@@ -2,6 +2,9 @@
 using Amazon.S3;
 using Amazon.S3.Transfer;
 using EOSNewYork.EOSCore;
+using EOSNewYork.EOSCore.Lib;
+using EOSNewYork.EOSCore.Params;
+using EOSNewYork.EOSCore.Response.API;
 using Newtonsoft.Json;
 using NLog;
 using PowerArgs;
@@ -26,6 +29,7 @@ namespace EOSAccountAnalyzer
         {
             Logger logger = NLog.LogManager.GetCurrentClassLogger();
             Args.InvokeAction<GetProgram>(args);
+            
         }
     }
 
@@ -294,7 +298,7 @@ namespace EOSAccountAnalyzer
 
             foreach (var contact in clist)
             {
-                var accountRow = new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = contact }).Result;
+                var accountRow = new EOS_Object<Account>(apihost).GetObjectsFromAPIAsync(new AccountParam() { account_name = contact }).Result;
                 await HandleDownloadResponse(accountRow, contact);
             }
 
@@ -309,14 +313,14 @@ namespace EOSAccountAnalyzer
             StopWatch.Start();
             if (Resume)
             {
-                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                Task[] requests = resumeContactList.Select(accountName => new EOS_Object<Account>(apihost).GetObjectsFromAPIAsync(new AccountParam() { account_name = accountName }))
                         .Select(r => HandleAsyncDownloadResponse(r))
                         .ToArray();
                 await Task.WhenAll(requests);
             }
             else
             {
-                Task[] requests = contactList.Select(accountName => new EOS_Object<EOSAccount_row>(apihost).getAllObjectRecordsAsync(new EOSAccount_row.postData() { account_name = accountName }))
+                Task[] requests = contactList.Select(accountName => new EOS_Object<Account>(apihost).GetObjectsFromAPIAsync(new AccountParam() { account_name = accountName }))
                         .Select(r => HandleAsyncDownloadResponse(r))
                         .ToArray();
                 await Task.WhenAll(requests);
@@ -364,14 +368,14 @@ namespace EOSAccountAnalyzer
             }
         }
 
-        private async Task HandleAsyncDownloadResponse(Task<EOSAccount_row> accountTask)
+        private async Task HandleAsyncDownloadResponse(Task<Account> accountTask)
         {
             var account = accountTask.Result;
             var accountName = account.account_name;
             await HandleDownloadResponse(account, accountName);
         }
 
-        private async Task HandleDownloadResponse(EOSAccount_row account, string accountName)
+        private async Task HandleDownloadResponse(Account account, string accountName)
         {
             try
             {
@@ -452,7 +456,7 @@ namespace EOSAccountAnalyzer
 
 
                     //logger.Info("Process:  {0}", file);
-                    var account = JsonConvert.DeserializeObject<EOSAccount_row>(File.ReadAllText(file));
+                    var account = JsonConvert.DeserializeObject<Account>(File.ReadAllText(file));
                     var account_name = account.account_name;
                     if (account.created_datetime > UTCMidnight)
                     {
